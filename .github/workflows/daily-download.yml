@@ -1,0 +1,65 @@
+name: Daily image download → public release asset
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Download image
+        env:
+          IMAGE_URL: ${{ vars.IMAGE_URL }}
+        run: |
+          python download_image.py
+
+      # Create or update a release with tag "daily"
+      - name: Create/Update release (tag: daily)
+        id: release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: daily
+          name: Daily Image
+          body: "Latest daily image asset(s)."
+          draft: false
+          prerelease: false
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload latest image asset
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: daily
+          file: out/image-latest.jpg
+          asset_name: image-latest.jpg
+          overwrite: true
+
+      # (Optional) Upload dated copy too
+      - name: Upload dated image asset(s)
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: daily
+          file: out/*
+          overwrite: true
+          file_glob: true
