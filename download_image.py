@@ -10,7 +10,7 @@ from typing import Iterable
 BASE_URL = os.getenv("BASE_URL", "https://storage-media.kejaksaanri.id/absen/upload")
 SUFFIXES = os.getenv("SUFFIXES", "in").split(",")  # e.g., "in,out" if you want both
 EXT = os.getenv("EXT", "png")  # default file extension
-ID_FILE = os.getenv("ID_FILE", "ids.txt")
+ID_FILE = os.getenv("ID_FILE", "nip.txt")
 TIMEOUT = int(os.getenv("HTTP_TIMEOUT", "60"))
 RETRIES = int(os.getenv("HTTP_RETRIES", "2"))  # simple retry for transient errors
 
@@ -33,7 +33,7 @@ def fetch(url: str, out_path: Path) -> bool:
                 r.raise_for_status()
                 out_path.parent.mkdir(parents=True, exist_ok=True)
                 with out_path.open("wb") as f:
-                    for chunk in r.iterate_content(1024 * 64):
+                    for chunk in r.iter_content(1024 * 64):
                         if chunk:
                             f.write(chunk)
             return True
@@ -51,7 +51,7 @@ def main():
 
     ids = list(read_ids(ID_FILE))
     if not ids:
-        print("No IDs found in ids.txt")
+        print("No IDs found in nip.txt")
         return
 
     out_dir = Path("out")
@@ -68,7 +68,7 @@ def main():
             url = f"{BASE_URL.rstrip('/')}/{tail}"
 
             # Stable (overwritten daily) and dated copies
-            fixed_name = f"{emp_id}-latest-{sfx.strip()}.{EXT}"
+            # fixed_name = f"{emp_id}-latest-{sfx.strip()}.{EXT}"
             dated_name = f"{emp_id}_{today}_{sfx.strip()}.{EXT}"
 
             fixed_path = out_dir / fixed_name
