@@ -4,7 +4,12 @@ on:
   schedule:
     # 09:00 Asia/Jakarta = 02:00 UTC
     - cron: "0 2 * * *"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      date_override:
+        description: "Test date (YYYY-MM-DD). Leave blank for today's Jakarta date."
+        required: false
+        default: ""
 
 permissions:
   contents: write  # create/update release + upload assets
@@ -26,18 +31,26 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests
 
+      - name: Show inputs
+        run: |
+          echo "DATE_OVERRIDE='${{ github.event.inputs.date_override }}'"
+
       - name: Download images by date
         env:
-          BASE_URL: "https://storage-media.kejaksaanri.id/absen/upload"  # quote URLs
-          SUFFIXES: "in"        # use "in,out" if needed
+          BASE_URL: "https://storage-media.kejaksaanri.id/absen/upload"
+          SUFFIXES: "in"
           EXT: "png"
           HTTP_TIMEOUT: "60"
           HTTP_RETRIES: "2"
-          ID_FILE: "nip.txt"
+          ID_FILE: "ids.txt"
+          DATE_OVERRIDE: "${{ github.event.inputs.date_override }}"
         run: |
+          set -euxo pipefail
           python download_image.py
+          echo "Downloaded files:"
+          ls -lh out || true
 
-      - name: "Create/Update release (tag: daily)"
+      - name: "Create or update release (tag: daily)"
         id: release
         uses: softprops/action-gh-release@v2
         with:
@@ -50,22 +63,46 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Upload stable "latest" files (overwritten daily)
+      - name: Check for latest files
+        id: has_latest
+        run: |
+          shopt -s nullglob
+          files=(out/*-latest-*.png)
+          echo "Found ${#files[@]} latest files"
+          if [ ${#files[@]} -gt 0 ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Upload latest assets
+        if: steps.has_latest.outputs.present == 'true'
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           tag: daily
-          file: "out/*-latest-*.png"   # QUOTED
+          file: "out/*-latest-*.png"
           file_glob: true
           overwrite: true
 
-      # Upload dated copies (history)
+      - name: Check for dated files
+        id: has_dated
+        run: |
+          shopt -s nullglob
+          files=(out/*_*.png)
+          echo "Found ${#files[@]} dated files"
+          if [ ${#files[@]} -gt 0 ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Upload dated assets
+        if: steps.has_dated.outputs.present == 'true'
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           tag: daily
-          file: "out/*_*.png"          # QUOTED
+          file: "out/*_*.png"
           file_glob: true
           overwrite: true

@@ -5,25 +5,29 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from pathlib import Path
 import requests
-from typing import Iterable
 
-BASE_URL = os.getenv("BASE_URL", "https://storage-media.kejaksaanri.id/absen/upload")
-SUFFIXES = os.getenv("SUFFIXES", "in").split(",")  # e.g., "in,out" if you want both
-EXT = os.getenv("EXT", "png")  # default file extension
-ID_FILE = os.getenv("ID_FILE", "nip.txt")
+BASE_URL = os.getenv("BASE_URL", "https://storage-media.kejaksaanri.id/absen/upload").rstrip("/")
+SUFFIXES = [s.strip() for s in os.getenv("SUFFIXES", "in").split(",") if s.strip()]
+EXT = os.getenv("EXT", "png").lstrip(".")
+ID_FILE = os.getenv("ID_FILE", "ids.txt")
 TIMEOUT = int(os.getenv("HTTP_TIMEOUT", "60"))
-RETRIES = int(os.getenv("HTTP_RETRIES", "2"))  # simple retry for transient errors
+RETRIES = int(os.getenv("HTTP_RETRIES", "2"))
 
-def read_ids(path: str) -> Iterable[str]:
-    p = Path(path)
+# Optional: override the date for testing: YYYY-MM-DD
+DATE_OVERRIDE = os.getenv("DATE_OVERRIDE", "").strip()
+
+def today_str():
+    if DATE_OVERRIDE:
+        return DATE_OVERRIDE
+    return datetime.now(ZoneInfo("Asia/Jakarta")).strftime("%Y-%m-%d")
+
+def read_ids():
+    p = Path(ID_FILE)
     if not p.exists():
-        print(f"ERROR: Missing {path}")
-        sys.exit(1)
-    with p.open() as f:
-        for line in f:
-            s = line.strip()
-            if s:
-                yield s
+        print(f"ERROR: Missing {ID_FILE}")
+        sys.exit(3)
+    ids = [line.strip() for line in p.read_text().splitlines() if line.strip()]
+    return ids
 
 def fetch(url: str, out_path: Path) -> bool:
     tries = 0
@@ -40,49 +44,55 @@ def fetch(url: str, out_path: Path) -> bool:
         except Exception as e:
             tries += 1
             if tries > RETRIES:
-                print(f"FAIL ({tries}/{RETRIES}): {url} → {e}")
+                print(f"[FAIL] {url} -> {e}")
                 return False
-            else:
-                print(f"Retry {tries}/{RETRIES} for {url} due to: {e}")
+            print(f"[Retry {tries}/{RETRIES}] {url} -> {e}")
 
 def main():
-    # Today in Asia/Jakarta
-    today = datetime.now(ZoneInfo("Asia/Jakarta")).strftime("%Y-%m-%d")
-
-    ids = list(read_ids(ID_FILE))
+    date_str = today_str()
+    ids = read_ids()
     if not ids:
-        print("No IDs found in nip.txt")
-        return
+        print("ERROR: ids.txt has no IDs")
+        sys.exit(4)
 
     out_dir = Path("out")
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    total = 0
-    ok = 0
+    total_attempts = 0
+    successes = 0
+    failures = 0
 
-    for idx, emp_id in enumerate(ids, start=1):
+    print(f"Config -> BASE_URL={BASE_URL}, EXT=.{EXT}, SUFFIXES={SUFFIXES}, DATE={date_str}")
+    print(f"IDs -> count={len(ids)}")
+
+    for emp_id in ids:
         for sfx in SUFFIXES:
-            # Construct daily URL:
-            # https://storage-media.kejaksaanri.id/absen/upload/<ID>_<YYYY-MM-DD>_<suffix>.png
-            tail = f"{emp_id}_{today}_{sfx.strip()}.{EXT}"
-            url = f"{BASE_URL.rstrip('/')}/{tail}"
+            tail = f"{emp_id}_{date_str}_{sfx}.{EXT}"
+            url = f"{BASE_URL}/{tail}"
 
-            # Stable (overwritten daily) and dated copies
-            # fixed_name = f"{emp_id}-latest-{sfx.strip()}.{EXT}"
-            dated_name = f"{emp_id}_{today}_{sfx.strip()}.{EXT}"
+            fixed_name = f"{emp_id}-latest-{sfx}.{EXT}"      # overwritten daily
+            dated_name = f"{emp_id}_{date_str}_{sfx}.{EXT}"  # history
 
             fixed_path = out_dir / fixed_name
             dated_path = out_dir / dated_name
 
-            print(f"[{idx}] Downloading {url} → {fixed_path}")
-            total += 1
+            total_attempts += 1
+            print(f"[GET] {url}")
 
             if fetch(url, fixed_path):
-                # also keep a dated copy (history)
                 dated_path.write_bytes(fixed_path.read_bytes())
-                ok += 1
+                successes += 1
+            else:
+                failures += 1
 
-    print(f"Done: {ok}/{total} files succeeded.")
+    print(f"Summary: attempts={total_attempts}, success={successes}, fail={failures}")
+
+    # Exit code rules:
+    # - If at least 1 succeeded, return 0 (let the workflow continue / upload what we have)
+    # - If none succeeded, return 1 (surface the problem)
+    if successes == 0:
+        print("ERROR: No images were successfully downloaded.")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
