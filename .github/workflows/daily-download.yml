@@ -37,7 +37,7 @@ jobs:
         run: |
           python download_image.py
 
-      - name: Create/Update release (tag: daily)
+      - name: "Create/Update release (tag: daily)"
         id: release
         uses: softprops/action-gh-release@v2
         with:
