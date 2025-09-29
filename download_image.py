@@ -69,11 +69,9 @@ def main():
         for sfx in SUFFIXES:
             tail = f"{emp_id}_{date_str}_{sfx}.{EXT}"
             url = f"{BASE_URL}/{tail}"
-
-            fixed_name = f"{emp_id}-latest-{sfx}.{EXT}"      # overwritten daily
+   # overwritten daily
             dated_name = f"{emp_id}_{date_str}_{sfx}.{EXT}"  # history
 
-            fixed_path = out_dir / fixed_name
             dated_path = out_dir / dated_name
 
             total_attempts += 1
