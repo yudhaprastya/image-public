@@ -1,4 +1,4 @@
-name: Daily attendance images → public release assets
+name: Daily attendance images - public release assets
 
 on:
   schedule:
@@ -28,26 +28,21 @@ jobs:
 
       - name: Download images by date
         env:
-          # Base host and path
-          BASE_URL: https://storage-media.kejaksaanri.id/absen/upload
-          # Choose which variants to grab: "in" or "in,out"
-          SUFFIXES: in
-          # File extension used by the server
-          EXT: png
-          # Optional: tweak HTTP behavior
+          BASE_URL: "https://storage-media.kejaksaanri.id/absen/upload"  # quote URLs
+          SUFFIXES: "in"        # use "in,out" if needed
+          EXT: "png"
           HTTP_TIMEOUT: "60"
           HTTP_RETRIES: "2"
-          # Path to the ids list
-          ID_FILE: ids.txt
+          ID_FILE: "nip.txt"
         run: |
-          python download_images_by_date.py
+          python download_image.py
 
       - name: Create/Update release (tag: daily)
         id: release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: daily
-          name: Daily Attendance Images
+          name: "Daily Attendance Images"
           body: "Latest attendance images (Jakarta date). Includes per-ID latest and dated files."
           draft: false
           prerelease: false
@@ -61,7 +56,7 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           tag: daily
-          file: out/*-latest-*.png
+          file: "out/*-latest-*.png"   # QUOTED
           file_glob: true
           overwrite: true
 
@@ -71,6 +66,6 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           tag: daily
-          file: out/*_*.png
+          file: "out/*_*.png"          # QUOTED
           file_glob: true
           overwrite: true
