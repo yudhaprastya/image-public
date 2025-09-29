@@ -77,8 +77,8 @@ def main():
             total_attempts += 1
             print(f"[GET] {url}")
 
-            if fetch(url, fixed_path):
-                dated_path.write_bytes(fixed_path.read_bytes())
+            if fetch(url, dated_path):
+                dated_path.write_bytes(dated_path.read_bytes())
                 successes += 1
             else:
                 failures += 1
