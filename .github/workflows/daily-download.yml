@@ -1,12 +1,13 @@
-name: Daily image download → public release asset
+name: Daily attendance images → public release assets
 
 on:
   schedule:
+    # 09:00 Asia/Jakarta = 02:00 UTC
     - cron: "0 2 * * *"
   workflow_dispatch: {}
 
 permissions:
-  contents: write
+  contents: write  # create/update release + upload assets
 
 jobs:
   run:
@@ -25,41 +26,51 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests
 
-      - name: Download image
+      - name: Download images by date
         env:
-          IMAGE_URL: ${{ vars.IMAGE_URL }}
+          # Base host and path
+          BASE_URL: https://storage-media.kejaksaanri.id/absen/upload
+          # Choose which variants to grab: "in" or "in,out"
+          SUFFIXES: in
+          # File extension used by the server
+          EXT: png
+          # Optional: tweak HTTP behavior
+          HTTP_TIMEOUT: "60"
+          HTTP_RETRIES: "2"
+          # Path to the ids list
+          ID_FILE: ids.txt
         run: |
-          python download_image.py
+          python download_images_by_date.py
 
-      # Create or update a release with tag "daily"
       - name: Create/Update release (tag: daily)
         id: release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: daily
-          name: Daily Image
-          body: "Latest daily image asset(s)."
+          name: Daily Attendance Images
+          body: "Latest attendance images (Jakarta date). Includes per-ID latest and dated files."
           draft: false
           prerelease: false
           make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload latest image asset
+      # Upload stable "latest" files (overwritten daily)
+      - name: Upload latest assets
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           tag: daily
-          file: out/image-latest.jpg
-          asset_name: image-latest.jpg
+          file: out/*-latest-*.png
+          file_glob: true
           overwrite: true
 
-      # (Optional) Upload dated copy too
-      - name: Upload dated image asset(s)
+      # Upload dated copies (history)
+      - name: Upload dated assets
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           tag: daily
-          file: out/*
-          overwrite: true
+          file: out/*_*.png
           file_glob: true
+          overwrite: true
